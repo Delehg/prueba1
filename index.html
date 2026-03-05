@@ -1,35 +1,115 @@
--- SCRIPT PARA TESTEAR MÚLTIPLES REMOTEEVENTS
-local possibleNames = {
-    "TradeEvent", "TradeSystem", "TradeRequest", "TradeOffer",
-    "AcceptTrade", "ConfirmTrade", "FinalizeTrade", "TradeReady",
-    "ReadyUp", "PlayerReady", "SetReady", "TradeReadyStatus",
-    "_trade", "_trd", "_t8f7g6h5", "_trade_ses",
-    "Trade_RemoteEvent", "Trade_Server", "TradeHandler",
-    "TradeMachine", "TradeInteraction", "ProcessTrade"
-}
+-- Script de diagnóstico con interfaz gráfica nativa
+local player = game:GetService("Players").LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local found = {}
+-- Crear la interfaz
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "RemoteEventScanner"
+screenGui.Parent = playerGui
 
-for _, name in ipairs(possibleNames) do
-    local event = ReplicatedStorage:FindFirstChild(name)
-    if event and event:IsA("RemoteEvent") then
-        table.insert(found, name)
-        print("✅ ENCONTRADO: " .. name)
-    end
-end
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 400, 0, 300)
+mainFrame.Position = UDim2.new(0.5, -200, 0.5, -150)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
 
-if #found == 0 then
-    print("❌ No se encontró ningún RemoteEvent conocido.")
-    print("🔍 Listando TODOS los RemoteEvents disponibles:")
-    for _, child in ipairs(ReplicatedStorage:GetChildren()) do
-        if child:IsA("RemoteEvent") then
-            print("   - " .. child.Name)
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 30)
+title.Position = UDim2.new(0, 0, 0, 0)
+title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+title.Text = "RemoteEvent Scanner"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 20
+title.Font = Enum.Font.SourceSansBold
+title.Parent = mainFrame
+
+local listFrame = Instance.new("ScrollingFrame")
+listFrame.Size = UDim2.new(1, -10, 1, -70)
+listFrame.Position = UDim2.new(0, 5, 0, 35)
+listFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+listFrame.BorderSizePixel = 0
+listFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+listFrame.ScrollBarThickness = 8
+listFrame.Parent = mainFrame
+
+local updateButton = Instance.new("TextButton")
+updateButton.Size = UDim2.new(1, -10, 0, 30)
+updateButton.Position = UDim2.new(0, 5, 1, -35)
+updateButton.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+updateButton.Text = "Actualizar lista"
+updateButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+updateButton.TextSize = 16
+updateButton.Font = Enum.Font.SourceSans
+updateButton.Parent = mainFrame
+
+local function scanForRemoteEvents()
+    -- Limpiar la lista anterior
+    for _, child in ipairs(listFrame:GetChildren()) do
+        if child:IsA("TextLabel") then
+            child:Destroy()
         end
     end
-else
-    print("\n🎯 REMOTES ENCONTRADOS (" .. #found .. "):")
-    for _, name in ipairs(found) do
-        print("   - " .. name)
+    
+    local locations = {
+        game:GetService("ReplicatedStorage"),
+        game:GetService("CoreGui"),
+        game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui"),
+        game:GetService("StarterGui"),
+        game:GetService("ServerScriptService") -- no accesible desde cliente, pero lo dejamos
+    }
+    
+    local found = {}
+    local total = 0
+    
+    for _, loc in ipairs(locations) do
+        if loc then
+            local function scan(container, depth)
+                if depth > 3 then return end -- limitar profundidad para evitar lag
+                for _, child in ipairs(container:GetChildren()) do
+                    if child:IsA("RemoteEvent") then
+                        table.insert(found, child.Name)
+                        total = total + 1
+                    end
+                    scan(child, depth + 1)
+                end
+            end
+            scan(loc, 0)
+        end
     end
+    
+    -- Mostrar resultados
+    local yPos = 0
+    for i, name in ipairs(found) do
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, 0, 0, 20)
+        label.Position = UDim2.new(0, 5, 0, yPos)
+        label.BackgroundTransparency = 1
+        label.Text = name
+        label.TextColor3 = Color3.fromRGB(200, 200, 200)
+        label.TextSize = 14
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Parent = listFrame
+        yPos = yPos + 22
+    end
+    
+    listFrame.CanvasSize = UDim2.new(0, 0, 0, yPos)
+    
+    -- Mostrar total
+    local totalLabel = Instance.new("TextLabel")
+    totalLabel.Size = UDim2.new(1, 0, 0, 20)
+    totalLabel.Position = UDim2.new(0, 5, 0, yPos)
+    totalLabel.BackgroundTransparency = 1
+    totalLabel.Text = "Total: " .. total
+    totalLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+    totalLabel.TextSize = 14
+    totalLabel.TextXAlignment = Enum.TextXAlignment.Left
+    totalLabel.Parent = listFrame
+    yPos = yPos + 22
+    listFrame.CanvasSize = UDim2.new(0, 0, 0, yPos)
 end
+
+updateButton.MouseButton1Click:Connect(scanForRemoteEvents)
+
+-- Escaneo inicial
+scanForRemoteEvents()
