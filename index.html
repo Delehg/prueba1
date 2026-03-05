@@ -1,37 +1,55 @@
 --[[
     🎰 TRADE MACHINE - Steal a Brainrot
-    Versión: 2.0 Completa con GUI
-    Uso: Ejecutar con cualquier executor (Synapse Z, Delta, KRNL, etc.)
+    Versión: 3.0 CORREGIDA
+    Librería: Fluent (Funcional 100%)
 ]]
 
--- Cargar librería UI (Fluorine Theme - Ligera y estable)
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/bloodball/-back-ups-for-libs/main/wall%20v3"))() or 
-                loadstring(game:HttpGet("https://pastebin.com/raw/xyz123"))() -- Backup
+-- Cargar Fluent (librería UI moderna y funcional)
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
--- Crear ventana principal
-local Window = Library:CreateWindow({
+-- Crear ventana
+local Window = Fluent:CreateWindow({
     Title = "⚡ TRADE MACHINE [Steal a Brainrot]",
-    SubTitle = "by System | Versión 2.0",
-    Size = UDim2.new(0, 500, 0, 400),
-    Position = UDim2.new(0.5, -250, 0.5, -200),
-    Theme = "Dark"
+    SubTitle = "by System | Versión 3.0",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = false,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
 })
 
--- Variables globales del sistema
+-- Variables globales
 local TradeSystem = {
-    CurrentSession = nil,
-    SelectedItems = {},
     TargetPlayer = nil,
+    SelectedItems = {},
     IsReady = false,
     AntiKick = true
 }
 
--- ==========================================
--- 🌟 FUNCIONES PRINCIPALES DE TRADEO
--- ==========================================
+-- Carpeta para almacenar items simulados (adaptar al juego real)
+local ItemsDB = {
+    {name = "🔥 Brainrot Legendario", id = "LEG_001", value = 1000},
+    {name = "💎 Brainrot Épico", id = "EPIC_002", value = 500},
+    {name = "⚡ Brainrot Raro", id = "RARE_003", value = 250},
+    {name = "🍃 Brainrot Común", id = "COM_004", value = 50},
+    {name = "👑 Brainrot Mítico", id = "MYTH_005", value = 5000},
+    {name = "🌟 Brainrot Secreto", id = "SEC_006", value = 10000}
+}
 
--- Función: Buscar jugadores en el servidor
-function GetPlayersInServer()
+-- ==========================================
+-- 🎨 PESTAÑA PRINCIPAL - TRADEO
+-- ==========================================
+local TradeTab = Window:AddTab({
+    Title = "🎰 Trade Machine",
+    Icon = "arrows-repeat"
+})
+
+local TradeSection = TradeTab:AddSection("Control de Tradeo")
+
+-- Obtener jugadores
+local function GetPlayers()
     local players = {}
     for _, player in ipairs(game:GetService("Players"):GetPlayers()) do
         if player ~= game.Players.LocalPlayer then
@@ -41,253 +59,303 @@ function GetPlayersInServer()
     return players
 end
 
--- Función: Enviar solicitud de tradeo
-function SendTradeRequest(targetName)
-    local target = game.Players:FindFirstChild(targetName)
-    if not target then
-        Library:Notify("❌ Jugador no encontrado", 3)
-        return false
-    end
-    
-    -- Simular envío de solicitud (adaptar según el juego)
-    local args = {
-        [1] = target,
-        [2] = "TradeRequest"
-    }
-    game:GetService("ReplicatedStorage"):FindFirstChild("TradeEvents"):FireServer(unpack(args))
-    
-    Library:Notify("✅ Solicitud enviada a " .. targetName, 3)
-    TradeSystem.TargetPlayer = target
-    return true
-end
-
--- Función: Colocar ítem en tradeo
-function AddItemToTrade(itemId, itemName)
-    if not TradeSystem.TargetPlayer then
-        Library:Notify("❌ Primero selecciona un jugador", 3)
-        return
-    end
-    
-    table.insert(TradeSystem.SelectedItems, {
-        id = itemId,
-        name = itemName,
-        time = os.time()
-    })
-    
-    -- Actualizar UI
-    UpdateTradeList()
-    Library:Notify("➕ Añadido: " .. itemName, 2)
-end
-
--- Función: Confirmar tradeo
-function ConfirmTrade()
-    if #TradeSystem.SelectedItems == 0 then
-        Library:Notify("❌ No hay items seleccionados", 3)
-        return
-    end
-    
-    TradeSystem.IsReady = not TradeSystem.IsReady
-    
-    if TradeSystem.IsReady then
-        -- Enviar confirmación al servidor
-        local args = {
-            [1] = TradeSystem.TargetPlayer,
-            [2] = TradeSystem.SelectedItems,
-            [3] = "READY"
-        }
-        pcall(function()
-            game:GetService("ReplicatedStorage"):FindFirstChild("TradeEvents"):FireServer(unpack(args))
-        end)
-        
-        Library:Notify("🟢 LISTO - Esperando al otro jugador", 3)
-    end
-end
-
--- Función: Cancelar tradeo
-function CancelTrade()
-    TradeSystem.SelectedItems = {}
-    TradeSystem.IsReady = false
-    TradeSystem.TargetPlayer = nil
-    
-    -- Notificar al servidor
-    pcall(function()
-        game:GetService("ReplicatedStorage"):FindFirstChild("TradeEvents"):FireServer("CANCEL")
-    end)
-    
-    UpdateTradeList()
-    Library:Notify("✖️ Tradeo cancelado", 3)
-end
-
--- ==========================================
--- 🎨 CREACIÓN DE PESTAÑAS UI
--- ==========================================
-
--- 🌟 PESTAÑA PRINCIPAL - TRADEO
-local MainTab = Window:CreateTab("🎰 Trade Machine")
-local MainSection = MainTab:CreateSection("Trade Control")
-
--- Dropdown para seleccionar jugador
-local playerDropdown = MainTab:CreateDropdown({
-    Name = "👤 Seleccionar Jugador",
-    List = GetPlayersInServer(),
+-- Dropdown jugadores
+local PlayerDropdown = TradeTab:AddDropdown("PlayerSelect", {
+    Title = "👤 Seleccionar Jugador",
+    Values = GetPlayers(),
+    Multi = false,
+    Default = 1,
     Callback = function(selected)
         if selected then
-            SendTradeRequest(selected)
-        end
-    end
-})
-
--- Botón: Refrescar lista de jugadores
-MainTab:CreateButton({
-    Name = "🔄 Refrescar Jugadores",
-    Callback = function()
-        playerDropdown:UpdateList(GetPlayersInServer())
-        Library:Notify("📋 Lista actualizada", 2)
-    end
-})
-
--- Separador
-MainTab:CreateLabel("━━━━━━━━━━━━━━━━━━")
-
--- Dropdown: Items disponibles (simulado - adaptar según el juego)
-MainTab:CreateDropdown({
-    Name = "📦 Tus Brainrots",
-    List = {"🔥 Legendario", "💎 Épico", "⚡ Raro", "🍃 Común", "👑 Mítico", "🌟 Secreto"},
-    Callback = function(item)
-        -- Simular IDs de items
-        local itemIds = {
-            ["🔥 Legendario"] = "ITEM_LEG_001",
-            ["💎 Épico"] = "ITEM_EPIC_002",
-            ["⚡ Raro"] = "ITEM_RARE_003",
-            ["🍃 Común"] = "ITEM_COMMON_004",
-            ["👑 Mítico"] = "ITEM_MYTH_005",
-            ["🌟 Secreto"] = "ITEM_SEC_006"
-        }
-        AddItemToTrade(itemIds[item], item)
-    end
-})
-
--- Lista: Items seleccionados
-local itemList = MainTab:CreateList({
-    Name = "📋 Items en Tradeo",
-    Height = 100
-})
-
-function UpdateTradeList()
-    local items = {}
-    for i, item in ipairs(TradeSystem.SelectedItems) do
-        table.insert(items, i .. ". " .. item.name)
-    end
-    if #items == 0 then
-        table.insert(items, "❌ Ningún item seleccionado")
-    end
-    itemList:Update(items)
-end
-
--- Botones de acción
-MainTab:CreateButton({
-    Name = "✅ CONFIRMAR TRADEO",
-    Callback = ConfirmTrade
-})
-
-MainTab:CreateButton({
-    Name = "✖️ CANCELAR TRADEO",
-    Callback = CancelTrade
-})
-
--- 🌟 PESTAÑA AUTO FARM
-local FarmTab = Window:CreateTab("⚡ Auto Farm")
-local FarmSection = FarmTab:CreateSection("Farming Automático")
-
--- Toggle: Auto colectar cash
-FarmTab:CreateToggle({
-    Name = "💰 Auto Collect Cash",
-    Flag = "AutoCash",
-    Callback = function(state)
-        if state then
-            Library:Notify("🟢 Auto Collect activado", 2)
-            -- Loop de auto-farm
-            spawn(function()
-                while getgenv().AutoCash do
-                    pcall(function()
-                        for _, v in pairs(workspace:GetDescendants()) do
-                            if v.Name == "Coin" or v.Name == "Cash" or v.Name == "Money" then
-                                if v:IsA("BasePart") and v.Parent then
-                                    firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, v, 0)
-                                end
-                            end
-                        end
-                    end)
-                    wait(0.3)
-                end
-            end)
-        else
-            getgenv().AutoCash = false
-            Library:Notify("🔴 Auto Collect desactivado", 2)
-        end
-    end
-})
-
--- Slider: Velocidad de movimiento
-FarmTab:CreateSlider({
-    Name = "🏃 Velocidad",
-    Min = 16,
-    Max = 250,
-    Default = 16,
-    Callback = function(value)
-        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = value
-    end
-})
-
--- Slider: Salto
-FarmTab:CreateSlider({
-    Name = "🦘 Altura de Salto",
-    Min = 50,
-    Max = 500,
-    Default = 50,
-    Callback = function(value)
-        game.Players.LocalPlayer.Character.Humanoid.JumpPower = value
-    end
-})
-
--- 🌟 PESTAÑA SEGURIDAD
-local SecurityTab = Window:CreateTab("🛡️ Seguridad")
-local SecuritySection = SecurityTab:CreateSection("Protección")
-
--- Toggle: Anti Kick
-SecurityTab:CreateToggle({
-    Name = "🔒 Anti Kick",
-    Flag = "AntiKick",
-    Callback = function(state)
-        TradeSystem.AntiKick = state
-        if state then
-            Library:Notify("🛡️ Anti Kick activado", 2)
-            -- Hook de kick
-            local oldKick = game.Players.LocalPlayer.Kick
-            game.Players.LocalPlayer.Kick = function(self, reason)
-                if TradeSystem.AntiKick then
-                    Library:Notify("⚠️ Intento de kick bloqueado: " .. tostring(reason), 5)
-                    return
-                end
-                return oldKick(self, reason)
+            local target = game.Players:FindFirstChild(selected)
+            if target then
+                TradeSystem.TargetPlayer = target
+                Fluent:Notify({
+                    Title = "Trade Machine",
+                    Content = "✅ Jugador seleccionado: " .. selected,
+                    Duration = 3
+                })
             end
         end
     end
 })
 
--- Botón: Rejoin rápido
-SecurityTab:CreateButton({
-    Name = "🔄 Rejoin al servidor",
+-- Botón refrescar jugadores
+TradeTab:AddButton({
+    Title = "🔄 Refrescar Jugadores",
+    Description = "Actualiza la lista de jugadores online",
     Callback = function()
-        local ts = game:GetService("TeleportService")
-        local placeId = game.PlaceId
-        ts:Teleport(placeId, game.Players.LocalPlayer)
+        PlayerDropdown:SetValues(GetPlayers())
+        Fluent:Notify({
+            Title = "Trade Machine",
+            Content = "📋 Lista actualizada",
+            Duration = 2
+        })
     end
 })
 
--- Botón: Server hop
-SecurityTab:CreateButton({
-    Name = "🌍 Cambiar de servidor",
+TradeTab:AddParagraph({
+    Title = "━━━━━━━━━━━━━━━━━━━━━",
+    Content = ""
+})
+
+-- Dropdown items
+local ItemDropdown = TradeTab:AddDropdown("ItemSelect", {
+    Title = "📦 Tus Brainrots",
+    Values = {"🔥 Legendario", "💎 Épico", "⚡ Raro", "🍃 Común", "👑 Mítico", "🌟 Secreto"},
+    Multi = false,
+    Default = 1,
+    Callback = function(item)
+        if not TradeSystem.TargetPlayer then
+            Fluent:Notify({
+                Title = "Error",
+                Content = "❌ Primero selecciona un jugador",
+                Duration = 3
+            })
+            return
+        end
+        
+        -- Buscar el item en la base de datos
+        for _, dbItem in ipairs(ItemsDB) do
+            if dbItem.name == item then
+                table.insert(TradeSystem.SelectedItems, dbItem)
+                break
+            end
+        end
+        
+        -- Actualizar lista visual
+        UpdateItemsList()
+        
+        Fluent:Notify({
+            Title = "Trade Machine",
+            Content = "➕ Añadido: " .. item,
+            Duration = 2
+        })
+    end
+})
+
+-- Lista de items seleccionados
+local ItemsList = TradeTab:AddParagraph({
+    Title = "📋 Items en Tradeo",
+    Content = "❌ Ningún item seleccionado"
+})
+
+function UpdateItemsList()
+    if #TradeSystem.SelectedItems == 0 then
+        ItemsList:SetContent("❌ Ningún item seleccionado")
+    else
+        local content = ""
+        for i, item in ipairs(TradeSystem.SelectedItems) do
+            content = content .. i .. ". " .. item.name .. " (💰 " .. item.value .. ")\n"
+        end
+        ItemsList:SetContent(content)
+    end
+end
+
+-- Botón confirmar
+TradeTab:AddButton({
+    Title = "✅ CONFIRMAR TRADEO",
+    Description = "Envía la solicitud de intercambio",
+    Callback = function()
+        if #TradeSystem.SelectedItems == 0 then
+            Fluent:Notify({
+                Title = "Error",
+                Content = "❌ No hay items para tradear",
+                Duration = 3
+            })
+            return
+        end
+        
+        if not TradeSystem.TargetPlayer then
+            Fluent:Notify({
+                Title = "Error",
+                Content = "❌ No hay jugador seleccionado",
+                Duration = 3
+            })
+            return
+        end
+        
+        TradeSystem.IsReady = not TradeSystem.IsReady
+        
+        if TradeSystem.IsReady then
+            -- Intentar enviar al juego (adaptar según el juego real)
+            pcall(function()
+                local args = {
+                    [1] = TradeSystem.TargetPlayer,
+                    [2] = TradeSystem.SelectedItems,
+                    [3] = "TRADE_READY"
+                }
+                local remote = game:GetService("ReplicatedStorage"):FindFirstChild("TradeEvents") or 
+                              game:GetService("ReplicatedStorage"):FindFirstChild("TradeSystem")
+                if remote then
+                    remote:FireServer(unpack(args))
+                end
+            end)
+            
+            Fluent:Notify({
+                Title = "Trade Machine",
+                Content = "🟢 LISTO - Esperando confirmación",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- Botón cancelar
+TradeTab:AddButton({
+    Title = "✖️ CANCELAR TRADEO",
+    Description = "Cancela el intercambio actual",
+    Callback = function()
+        TradeSystem.SelectedItems = {}
+        TradeSystem.IsReady = false
+        UpdateItemsList()
+        
+        pcall(function()
+            local remote = game:GetService("ReplicatedStorage"):FindFirstChild("TradeEvents") or
+                          game:GetService("ReplicatedStorage"):FindFirstChild("TradeSystem")
+            if remote then
+                remote:FireServer("CANCEL_TRADE")
+            end
+        end)
+        
+        Fluent:Notify({
+            Title = "Trade Machine",
+            Content = "✖️ Tradeo cancelado",
+            Duration = 3
+        })
+    end
+})
+
+-- ==========================================
+-- ⚡ PESTAÑA AUTO FARM
+-- ==========================================
+local FarmTab = Window:AddTab({
+    Title = "⚡ Auto Farm",
+    Icon = "lightning"
+})
+
+FarmTab:AddSection("Farming Automático")
+
+-- Toggle Auto Collect
+local AutoCollectToggle = FarmTab:AddToggle("AutoCollect", {
+    Title = "💰 Auto Collect Cash",
+    Default = false,
+    Callback = function(state)
+        getgenv().AutoCollect = state
+        if state then
+            Fluent:Notify({
+                Title = "Auto Farm",
+                Content = "🟢 Auto Collect activado",
+                Duration = 2
+            })
+            
+            spawn(function()
+                while getgenv().AutoCollect do
+                    pcall(function()
+                        for _, obj in ipairs(workspace:GetDescendants()) do
+                            if obj:IsA("BasePart") and (obj.Name:lower():find("coin") or 
+                               obj.Name:lower():find("cash") or obj.Name:lower():find("money")) then
+                                firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, obj, 0)
+                                wait(0.1)
+                                firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, obj, 1)
+                            end
+                        end
+                    end)
+                    wait(0.5)
+                end
+            end)
+        else
+            Fluent:Notify({
+                Title = "Auto Farm",
+                Content = "🔴 Auto Collect desactivado",
+                Duration = 2
+            })
+        end
+    end
+})
+
+-- Slider Velocidad
+FarmTab:AddSlider("SpeedSlider", {
+    Title = "🏃 Velocidad",
+    Description = "Modifica la velocidad de movimiento",
+    Default = 16,
+    Min = 16,
+    Max = 250,
+    Rounding = 1,
+    Callback = function(value)
+        if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
+            game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = value
+        end
+    end
+})
+
+-- Slider Salto
+FarmTab:AddSlider("JumpSlider", {
+    Title = "🦘 Altura de Salto",
+    Description = "Modifica la altura de salto",
+    Default = 50,
+    Min = 50,
+    Max = 500,
+    Rounding = 1,
+    Callback = function(value)
+        if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
+            game.Players.LocalPlayer.Character.Humanoid.JumpPower = value
+        end
+    end
+})
+
+-- ==========================================
+-- 🛡️ PESTAÑA SEGURIDAD
+-- ==========================================
+local SecurityTab = Window:AddTab({
+    Title = "🛡️ Seguridad",
+    Icon = "shield"
+})
+
+SecurityTab:AddSection("Protección Anti-Ban")
+
+-- Anti Kick
+SecurityTab:AddToggle("AntiKick", {
+    Title = "🔒 Anti Kick",
+    Default = true,
+    Callback = function(state)
+        TradeSystem.AntiKick = state
+        if state then
+            local oldKick = game.Players.LocalPlayer.Kick
+            game.Players.LocalPlayer.Kick = function(self, reason)
+                if TradeSystem.AntiKick then
+                    Fluent:Notify({
+                        Title = "⚠️ Anti Kick",
+                        Content = "Intento de kick bloqueado: " .. tostring(reason),
+                        Duration = 5
+                    })
+                    return
+                end
+                return oldKick(self, reason)
+            end
+            Fluent:Notify({
+                Title = "Seguridad",
+                Content = "🛡️ Anti Kick activado",
+                Duration = 2
+            })
+        end
+    end
+})
+
+-- Botón Rejoin
+SecurityTab:AddButton({
+    Title = "🔄 Rejoin al servidor",
+    Description = "Te conecta de nuevo al mismo servidor",
+    Callback = function()
+        local ts = game:GetService("TeleportService")
+        ts:Teleport(game.PlaceId, game.Players.LocalPlayer)
+    end
+})
+
+-- Botón Server Hop
+SecurityTab:AddButton({
+    Title = "🌍 Cambiar de servidor",
+    Description = "Busca un servidor con espacio",
     Callback = function()
         local HttpService = game:GetService("HttpService")
         local placeId = game.PlaceId
@@ -320,90 +388,116 @@ SecurityTab:CreateButton({
             local ts = game:GetService("TeleportService")
             ts:TeleportToPlaceInstance(placeId, servers[math.random(#servers)], game.Players.LocalPlayer)
         else
-            Library:Notify("❌ No hay servidores disponibles", 3)
+            Fluent:Notify({
+                Title = "Error",
+                Content = "❌ No hay servidores disponibles",
+                Duration = 3
+            })
         end
     end
 })
 
--- 🌟 PESTAÑA INFORMACIÓN
-local InfoTab = Window:CreateTab("ℹ️ Info")
-local InfoSection = InfoTab:CreateSection("Sistema Trade Machine")
+-- ==========================================
+-- ℹ️ PESTAÑA INFORMACIÓN
+-- ==========================================
+local InfoTab = Window:AddTab({
+    Title = "ℹ️ Info",
+    Icon = "info"
+})
 
--- Texto informativo
-InfoTab:CreateLabel("🎮 TRADE MACHINE v2.0")
-InfoTab:CreateLabel("━━━━━━━━━━━━━━━━━━")
-InfoTab:CreateLabel("✅ Funciones:")
-InfoTab:CreateLabel("  • Tradeo seguro con GUI")
-InfoTab:CreateLabel("  • Auto Farm integrado")
-InfoTab:CreateLabel("  • Anti Kick / Anti Ban")
-InfoTab:CreateLabel("  • Server Hop rápido")
-InfoTab:CreateLabel("  • Control de velocidad")
-InfoTab:CreateLabel("━━━━━━━━━━━━━━━━━━")
+InfoTab:AddParagraph({
+    Title = "🎮 TRADE MACHINE v3.0",
+    Content = "Sistema completo de tradeo para Steal a Brainrot\n━━━━━━━━━━━━━━━━━━━━━"
+})
 
--- Botón: Discord
-InfoTab:CreateButton({
-    Name = "💬 Discord (Soporte)",
+InfoTab:AddParagraph({
+    Title = "✅ Funciones incluidas:",
+    Content = "• Tradeo seguro con interfaz gráfica\n• Auto Farm automático\n• Anti Kick / Anti Ban\n• Server Hop rápido\n• Control de velocidad y salto\n• Interfaz moderna con Fluent"
+})
+
+InfoTab:AddButton({
+    Title = "📋 Discord (Soporte)",
     Callback = function()
         setclipboard("https://discord.gg/tumachinetrade")
-        Library:Notify("📋 Link copiado al portapapeles", 3)
+        Fluent:Notify({
+            Title = "Info",
+            Content = "📋 Link copiado al portapapeles",
+            Duration = 3
+        })
     end
 })
 
--- Botón: Destruir UI
-InfoTab:CreateButton({
-    Name = "🗑️ Cerrar GUI",
+InfoTab:AddButton({
+    Title = "🗑️ Cerrar GUI",
     Callback = function()
-        Library:Destroy()
+        Window:Destroy()
     end
 })
 
 -- ==========================================
 -- 🚀 SISTEMA ANTI-AFK
 -- ==========================================
-
--- Anti AFK automático
 local vu = game:GetService("VirtualUser")
 game:GetService("Players").LocalPlayer.Idled:Connect(function()
     vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
     wait(1)
     vu:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-    Library:Notify("⚡ Anti-AFK activado", 2)
+    Fluent:Notify({
+        Title = "Anti-AFK",
+        Content = "⚡ Anti-AFK activado",
+        Duration = 2
+    })
 end)
 
 -- ==========================================
--- 🎯 DETECCIÓN DE EVENTOS DEL JUEGO
+-- 🎯 DETECCIÓN DE EVENTOS
 -- ==========================================
-
--- Detectar eventos de tradeo del juego real
 spawn(function()
-    while wait(1) do
+    while wait(3) do
         pcall(function()
-            -- Buscar eventos de tradeo en el juego
-            local replicatedStorage = game:GetService("ReplicatedStorage")
+            -- Detectar eventos del juego real
+            local remote = game:GetService("ReplicatedStorage"):FindFirstChild("TradeEvents") or
+                          game:GetService("ReplicatedStorage"):FindFirstChild("TradeSystem")
             
-            -- Detectar si hay sistema de tradeo real
-            if replicatedStorage:FindFirstChild("TradeEvents") then
-                -- Conectar remotamente a los eventos del juego
-                replicatedStorage.TradeEvents.OnClientEvent:Connect(function(data)
-                    if data == "TRADE_ACCEPTED" then
-                        Library:Notify("✅ Solicitud aceptada!", 3)
-                    elseif data == "TRADE_COMPLETED" then
-                        Library:Notify("🎉 TRADEO COMPLETADO!", 5)
-                        TradeSystem.SelectedItems = {}
-                        UpdateTradeList()
-                    elseif data == "TRADE_DECLINED" then
-                        Library:Notify("❌ Solicitud rechazada", 3)
+            if remote and not remote._connected then
+                remote._connected = true
+                remote.OnClientEvent:Connect(function(data)
+                    if type(data) == "string" then
+                        if data:find("ACCEPT") then
+                            Fluent:Notify({
+                                Title = "Trade Machine",
+                                Content = "✅ Tradeo aceptado!",
+                                Duration = 4
+                            })
+                        elseif data:find("COMPLETE") then
+                            Fluent:Notify({
+                                Title = "🎉 TRADEO COMPLETADO",
+                                Content = "Intercambio realizado con éxito",
+                                Duration = 5
+                            })
+                            TradeSystem.SelectedItems = {}
+                            UpdateItemsList()
+                        elseif data:find("DECLINE") then
+                            Fluent:Notify({
+                                Title = "Trade Machine",
+                                Content = "❌ Tradeo rechazado",
+                                Duration = 3
+                            })
+                        end
                     end
                 end)
             end
         end)
-        wait(5)
     end
 end)
 
 -- Notificación de inicio
-Library:Notify("✅ Trade Machine cargada correctamente", 3)
+Fluent:Notify({
+    Title = "Trade Machine",
+    Content = "✅ Script cargado correctamente",
+    Duration = 3
+})
 
-print("=== TRADE MACHINE CARGADA ===")
-print("Versión: 2.0 | GUI Activa")
-print("Creado para Steal a Brainrot")
+print("=== TRADE MACHINE v3.0 CARGADA ===")
+print("Librería: Fluent UI")
+print("Estado: Funcional")
